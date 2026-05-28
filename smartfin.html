@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartFin — Finance Planner</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', 'Segoe UI', system-ui, sans-serif; background: #F4F6F9; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: #F4F6F9; }
+  ::-webkit-scrollbar-thumb { background: #CBD5E0; border-radius: 99px; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+/* ─── SVG ICONS ──────────────────────────────────────────────────────── */
+const Ic = ({ d, size = 18, sw = 1.7, fill = "none" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} stroke="currentColor"
+    strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">
+    {(Array.isArray(d) ? d : [d]).map((p, i) => <path key={i} d={p} />)}
+  </svg>
+);
+const Icons = {
+  home:    () => <Ic d={["M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z","M9 22V12h6v10"]} />,
+  tax:     () => <Ic d={["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z","M14 2v6h6","M16 13H8","M16 17H8","M10 9H8"]} />,
+  budget:  () => <Ic d={["M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z","M8 12l2.5 2.5L16 9"]} />,
+  emi:     () => <Ic d={["M12 1v22","M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"]} />,
+  goals:   () => <Ic d={["M22 11.08V12a10 10 0 1 1-5.93-9.14","M22 4L12 14.01l-3-3"]} />,
+  savings: () => <Ic d={["M3 3v18h18","M18.4 9a9 9 0 0 1-12.77 8","M7 17l5-5 4 4 5-6"]} />,
+  networth:() => <Ic d={["M2 20h20","M4 20V10l8-6 8 6v10","M9 20v-5h6v5"]} />,
+  plus:    () => <Ic d={["M12 5v14","M5 12h14"]} />,
+  trash:   () => <Ic d={["M3 6h18","M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"]} />,
+  right:   () => <Ic d="M9 18l6-6-6-6" />,
+  info:    () => <Ic d={["M12 22c5.52 0 10-4.48 10-10S17.52 2 12 2 2 6.48 2 12s4.48 10 10 10z","M12 8v4","M12 16h.01"]} />,
+  cal:     () => <Ic d={["M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z","M16 2v4","M8 2v4","M3 10h18"]} />,
+  rupee:   () => <Ic d={["M6 3h12","M6 8h12","M6 13l8.5 8","M6 13h3a4 4 0 0 0 0-5H6"]} />,
+  check:   () => <Ic d="M20 6L9 17l-5-5" sw={2.2} />,
+};
+
+/* ─── TOKENS ─────────────────────────────────────────────────────────── */
+const T = {
+  bg:"#F4F6F9", surface:"#FFFFFF", navy:"#0E1F40", navyD:"#091530",
+  teal:"#0BA39A", tealLt:"#E0F7F5", tealDk:"#088880",
+  gold:"#C9920A", goldLt:"#FEF3D7",
+  red:"#D63D3D", redLt:"#FDEAEA",
+  green:"#1A8A5C", greenLt:"#D5F5E6",
+  purple:"#5B4FCF", purpleLt:"#EDEAFD",
+  blue:"#1B6FD8", blueLt:"#E0EDFD",
+  text:"#111827", sub:"#6B7280", border:"#E5E7EB",
+};
+
+/* ─── UTILS ──────────────────────────────────────────────────────────── */
+const fmt  = n => "₹" + Number(n||0).toLocaleString("en-IN");
+const fmtL = n => { if(n>=10000000) return "₹"+(n/10000000).toFixed(2)+"Cr"; if(n>=100000) return "₹"+(n/100000).toFixed(2)+"L"; return fmt(n); };
+const pct  = (a,b) => b ? Math.min(100,Math.round(a/b*100)) : 0;
+
+/* ─── SHARED UI ──────────────────────────────────────────────────────── */
+function Card({children, style={}, onClick}){
+  return <div onClick={onClick} style={{background:T.surface,borderRadius:14,border:`1px solid ${T.border}`,
+    boxShadow:"0 1px 4px rgba(0,0,0,0.05)",padding:"22px 24px",...style}}>{children}</div>;
+}
+function STitle({children, style={}}){
+  return <h2 style={{fontSize:16,fontWeight:700,color:T.navy,margin:"0 0 18px",letterSpacing:-0.3,...style}}>{children}</h2>;
+}
+function Lbl({children}){
+  return <div style={{fontSize:11,fontWeight:600,color:T.sub,textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>{children}</div>;
+}
+function FInput({label,value,onChange,type="number",prefix,placeholder,step=1000,min=0}){
+  return <div style={{marginBottom:16}}>
+    <Lbl>{label}</Lbl>
+    <div style={{display:"flex",border:`1.5px solid ${T.border}`,borderRadius:9,overflow:"hidden",background:"#fff"}}
+      onFocusCapture={e=>e.currentTarget.style.borderColor=T.teal}
+      onBlurCapture={e=>e.currentTarget.style.borderColor=T.border}>
+      {prefix&&<span style={{padding:"10px 12px",background:T.bg,borderRight:`1px solid ${T.border}`,fontSize:12,fontWeight:600,color:T.sub,userSelect:"none",flexShrink:0}}>{prefix}</span>}
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)} min={min} step={step} placeholder={placeholder}
+        style={{flex:1,padding:"10px 13px",border:"none",outline:"none",fontSize:14,color:T.text,background:"transparent",fontFamily:"inherit",minWidth:0}}/>
+    </div>
+  </div>;
+}
+function SelInput({label,value,onChange,options}){
+  return <div style={{marginBottom:16}}>
+    <Lbl>{label}</Lbl>
+    <div style={{border:`1.5px solid ${T.border}`,borderRadius:9,overflow:"hidden",background:"#fff"}}>
+      <select value={value} onChange={e=>onChange(e.target.value)}
+        style={{width:"100%",padding:"10px 13px",border:"none",outline:"none",fontSize:14,color:T.text,background:"transparent",cursor:"pointer",fontFamily:"inherit"}}>
+        {options.map(o=><option key={Array.isArray(o)?o[0]:o} value={Array.isArray(o)?o[0]:o}>{Array.isArray(o)?o[1]:o}</option>)}
+      </select>
+    </div>
+  </div>;
+}
+function Btn({children,onClick,bg=T.navy,color="#fff",style={}}){
+  return <button onClick={onClick} style={{display:"flex",alignItems:"center",gap:8,padding:"11px 18px",background:bg,color,border:"none",borderRadius:9,
+    fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"opacity 0.15s,transform 0.12s",...style}}
+    onMouseEnter={e=>{e.currentTarget.style.opacity="0.88";e.currentTarget.style.transform="translateY(-1px)"}}
+    onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform=""}}>{children}</button>;
+}
+function Bar({value,total,color=T.teal,h=10}){
+  const p=pct(value,total);
+  return <div style={{background:T.bg,borderRadius:99,height:h,overflow:"hidden"}}>
+    <div style={{width:`${p}%`,background:color,height:"100%",borderRadius:99,transition:"width 0.5s ease"}}/>
+  </div>;
+}
+function Stat({label,value,color=T.navy,sub}){
+  return <div style={{padding:"14px 16px",background:T.bg,borderRadius:10,border:`1px solid ${T.border}`}}>
+    <div style={{fontSize:10,fontWeight:600,color:T.sub,textTransform:"uppercase",letterSpacing:0.8,marginBottom:5}}>{label}</div>
+    <div style={{fontSize:18,fontWeight:800,color,letterSpacing:-0.5}}>{value}</div>
+    {sub&&<div style={{fontSize:11,color:T.sub,marginTop:3}}>{sub}</div>}
+  </div>;
+}
+function RRow({label,value,highlight,bold,last}){
+  return <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:last?"none":`1px solid ${T.border}`}}>
+    <span style={{fontSize:13,color:T.sub}}>{label}</span>
+    <span style={{fontSize:14,fontWeight:bold?700:500,color:highlight||T.text}}>{value}</span>
+  </div>;
+}
+function Badge({children,color=T.teal,bg}){
+  return <span style={{fontSize:11,fontWeight:700,color,background:bg||color+"20",borderRadius:99,padding:"3px 10px"}}>{children}</span>;
+}
+function PieChart({slices,size=130}){
+  const total=slices.reduce((a,s)=>a+s.value,0);
+  if(!total) return <div style={{color:T.sub,textAlign:"center",padding:24,fontSize:13}}>No data yet.</div>;
+  let ang=-Math.PI/2;
+  const cx=size/2,cy=size/2,r=size/2-10;
+  const paths=slices.filter(s=>s.value>0).map(s=>{
+    const a=(s.value/total)*2*Math.PI;
+    const x1=cx+r*Math.cos(ang),y1=cy+r*Math.sin(ang);
+    ang+=a;
+    const x2=cx+r*Math.cos(ang),y2=cy+r*Math.sin(ang);
+    return{d:`M${cx},${cy}L${x1.toFixed(1)},${y1.toFixed(1)}A${r},${r} 0 ${a>Math.PI?1:0},1 ${x2.toFixed(1)},${y2.toFixed(1)}Z`,...s};
+  });
+  return <div style={{display:"flex",alignItems:"center",gap:20}}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{flexShrink:0}}>
+      {paths.map((p,i)=><path key={i} d={p.d} fill={p.color} stroke="#fff" strokeWidth={2}/>)}
+    </svg>
+    <div style={{flex:1,display:"flex",flexDirection:"column",gap:7}}>
+      {paths.map((p,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{width:9,height:9,borderRadius:2,background:p.color,flexShrink:0}}/>
+        <span style={{fontSize:12,color:T.sub,flex:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.label}</span>
+        <span style={{fontSize:12,fontWeight:600,color:T.text,whiteSpace:"nowrap"}}>{fmt(p.value)}</span>
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ══ MODULE 1 — TAX CALCULATOR ══════════════════════════════════════════ */
+function calcOld(inc,c80c,c80d,hra){
+  const ti=Math.max(0,inc-50000-Math.min(c80c,150000)-Math.min(c80d,25000)-hra);
+  let t=0;
+  if(ti>1000000)t+=(ti-1000000)*0.30;
+  if(ti>500000) t+=(Math.min(ti,1000000)-500000)*0.20;
+  if(ti>250000) t+=(Math.min(ti,500000)-250000)*0.05;
+  if(ti<=500000)t=Math.max(0,t-12500);
+  return{taxable:ti,tax:Math.round(t*1.04)};
+}
+function calcNew(inc){
+  const ti=Math.max(0,inc-75000);
+  let t=0;
+  if(ti>1500000)t+=(ti-1500000)*0.30;
+  if(ti>1200000)t+=(Math.min(ti,1500000)-1200000)*0.20;
+  if(ti>1000000)t+=(Math.min(ti,1200000)-1000000)*0.15;
+  if(ti>700000) t+=(Math.min(ti,1000000)-700000)*0.10;
+  if(ti>300000) t+=(Math.min(ti,700000)-300000)*0.05;
+  if(ti<=700000)t=Math.max(0,t-25000);
+  return{taxable:ti,tax:Math.round(t*1.04)};
+}
+function TaxCalc(){
+  const[inc,setInc]=useState(800000);
+  const[c80c,setC80c]=useState(150000);
+  const[c80d,setC80d]=useState(25000);
+  const[hra,setHra]=useState(60000);
+  const I=Number(inc),old=calcOld(I,Number(c80c),Number(c80d),Number(hra)),nw=calcNew(I);
+  const betterOld=old.tax<=nw.tax,saving=Math.abs(old.tax-nw.tax);
+  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <Card>
+      <STitle>Income & Deductions</STitle>
+      <FInput label="Gross Annual Income" value={inc} onChange={setInc} prefix="INR" step={10000}/>
+      <FInput label="Section 80C (Max 1,50,000)" value={c80c} onChange={setC80c} prefix="INR" step={5000}/>
+      <FInput label="Section 80D — Health Insurance" value={c80d} onChange={setC80d} prefix="INR" step={5000}/>
+      <FInput label="HRA Exemption" value={hra} onChange={setHra} prefix="INR" step={5000}/>
+      <div style={{display:"flex",gap:8,alignItems:"flex-start",padding:"11px 13px",background:T.bg,borderRadius:9,fontSize:12,color:T.sub}}>
+        <span style={{flexShrink:0,marginTop:1}}><Icons.info/></span>
+        Standard Deduction ₹50,000 applied automatically. 4% Health & Education Cess included.
+      </div>
+    </Card>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {[{label:"Old Regime",res:old,isBetter:betterOld},{label:"New Regime — FY 2024-25",res:nw,isBetter:!betterOld}].map(({label,res,isBetter})=>
+        <Card key={label} style={{borderLeft:`4px solid ${isBetter?T.teal:T.border}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+            <h3 style={{margin:0,fontSize:14,fontWeight:700,color:T.navy}}>{label}</h3>
+            {isBetter&&<Badge color={T.teal}>Recommended</Badge>}
+          </div>
+          <RRow label="Taxable Income" value={fmt(res.taxable)}/>
+          <RRow label="Tax + 4% Cess" value={fmt(res.tax)} bold highlight={T.navy}/>
+          <RRow label="Monthly TDS" value={fmt(Math.round(res.tax/12))}/>
+          <RRow label="Take-home / yr" value={fmt(I-res.tax)} bold last/>
+        </Card>)}
+      <Card style={{background:T.navy,border:"none"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>
+          Tax saved by choosing {betterOld?"Old":"New"} Regime
+        </div>
+        <div style={{fontSize:34,fontWeight:800,color:"#3ECFC6",letterSpacing:-1}}>{fmt(saving)}</div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.35)",marginTop:4}}>per financial year</div>
+      </Card>
+    </div>
+  </div>;
+}
+
+/* ══ MODULE 2 — BUDGET TRACKER ══════════════════════════════════════════ */
+const CATS=["Housing","Food & Groceries","Transport","Healthcare","Entertainment","Education","EMI / Loan","Savings","Utilities","Other"];
+const CAT_CLR=["#0E2040","#0BA39A","#C9920A","#D63D3D","#6366F1","#0EA5E9","#8B5CF6","#1A8A5C","#F59E0B","#6B7280"];
+function Budget(){
+  const[income,setIncome]=useState(65000);
+  const[entries,setEntries]=useState([
+    {id:1,cat:"Housing",amt:15000,note:""},{id:2,cat:"Food & Groceries",amt:8000,note:""},
+    {id:3,cat:"Transport",amt:3500,note:""},{id:4,cat:"EMI / Loan",amt:12000,note:""},
+    {id:5,cat:"Savings",amt:6000,note:""},{id:6,cat:"Utilities",amt:2000,note:""},
+  ]);
+  const[cat,setCat]=useState("Food & Groceries");
+  const[amt,setAmt]=useState("");const[note,setNote]=useState("");
+  const totalExp=entries.reduce((a,e)=>a+Number(e.amt),0);
+  const remaining=Number(income)-totalExp;
+  const used=pct(totalExp,income);
+  const agg=CATS.map((c,i)=>({label:c,color:CAT_CLR[i],value:entries.filter(e=>e.cat===c).reduce((a,e)=>a+Number(e.amt),0)})).filter(x=>x.value>0);
+  const add=()=>{if(!amt||Number(amt)<=0)return;setEntries(p=>[...p,{id:Date.now(),cat,amt:Number(amt),note}]);setAmt("");setNote("");};
+  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <STitle>Monthly Income</STitle>
+        <FInput label="Take-home Salary" value={income} onChange={setIncome} prefix="INR" step={1000}/>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+          <Stat label="Income" value={fmt(income)} color={T.teal}/>
+          <Stat label="Spent" value={fmt(totalExp)} color={T.red}/>
+          <Stat label="Balance" value={fmt(remaining)} color={remaining<0?T.red:T.green}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:T.sub,marginBottom:7}}>
+          <span>Budget utilised</span>
+          <span style={{fontWeight:700,color:used>90?T.red:T.teal}}>{used}%</span>
+        </div>
+        <Bar value={totalExp} total={income} color={used>90?T.red:T.teal}/>
+      </Card>
+      <Card>
+        <STitle>Add Expense</STitle>
+        <SelInput label="Category" value={cat} onChange={setCat} options={CATS}/>
+        <FInput label="Amount" value={amt} onChange={setAmt} prefix="INR" placeholder="0"/>
+        <FInput label="Note (optional)" value={note} onChange={setNote} type="text" placeholder="e.g. Grocery run" step={1}/>
+        <Btn onClick={add} bg={T.teal} style={{width:"100%",justifyContent:"center"}}><Icons.plus/>Add Entry</Btn>
+      </Card>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card><STitle>Spending Breakdown</STitle><PieChart slices={agg}/></Card>
+      <Card style={{flex:1}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+          <STitle style={{margin:0}}>All Entries</STitle>
+          <button onClick={()=>setEntries([])} style={{fontSize:11,color:T.sub,background:"none",border:`1px solid ${T.border}`,borderRadius:7,padding:"5px 10px",cursor:"pointer",fontFamily:"inherit"}}>Clear all</button>
+        </div>
+        <div style={{maxHeight:260,overflowY:"auto"}}>
+          {entries.length===0?<div style={{color:T.sub,textAlign:"center",padding:24,fontSize:13}}>No entries yet.</div>
+          :entries.map(e=>{const idx=CATS.indexOf(e.cat);return(
+            <div key={e.id} style={{display:"flex",alignItems:"center",gap:12,padding:"9px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{width:8,height:8,borderRadius:99,background:CAT_CLR[idx]||T.sub,flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:13,fontWeight:500,color:T.text}}>{e.cat}</div>
+                {e.note&&<div style={{fontSize:11,color:T.sub}}>{e.note}</div>}
+              </div>
+              <span style={{fontSize:13,fontWeight:700,color:T.red,whiteSpace:"nowrap"}}>{fmt(e.amt)}</span>
+              <button onClick={()=>setEntries(p=>p.filter(x=>x.id!==e.id))} style={{background:"none",border:"none",cursor:"pointer",color:T.sub,display:"flex",padding:4,flexShrink:0}}><Icons.trash/></button>
+            </div>);})}
+        </div>
+      </Card>
+    </div>
+  </div>;
+}
+
+/* ══ MODULE 3 — EMI ANALYSER ══════════════════════════════════════════ */
+function EMI(){
+  const[P,setP]=useState(500000);const[rate,setRate]=useState(8.5);const[n,setN]=useState(60);
+  const principal=Number(P),r=Number(rate)/12/100,months=Number(n);
+  const emi=r?Math.round(principal*r*Math.pow(1+r,months)/(Math.pow(1+r,months)-1)):Math.round(principal/months);
+  const total=emi*months,interest=total-principal,princPct=Math.round(principal/total*100);
+  const sched=[];let bal=principal;
+  for(let i=1;i<=Math.min(months,36);i++){const int=Math.round(bal*r);const pr=Math.min(bal,emi-int);bal=Math.max(0,bal-pr);sched.push({m:i,emi,int,pr,bal});}
+  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <STitle>Loan Parameters</STitle>
+        <FInput label="Loan Amount" value={P} onChange={setP} prefix="INR" step={50000}/>
+        <FInput label="Annual Interest Rate (%)" value={rate} onChange={setRate} prefix="%" step={0.1} min={1}/>
+        <FInput label="Tenure (Months)" value={n} onChange={setN} prefix="mo" step={12} min={1}/>
+      </Card>
+      <Card style={{background:T.navy,border:"none"}}>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Monthly EMI</div>
+        <div style={{fontSize:38,fontWeight:800,color:"#3ECFC6",letterSpacing:-1.5}}>{fmt(emi)}</div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.35)",marginTop:4}}>
+          {Math.floor(months/12)>0?`${Math.floor(months/12)}y `:""}{months%12>0?`${months%12}m`:""} at {rate}% p.a.
+        </div>
+      </Card>
+      <Card>
+        <STitle>Summary</STitle>
+        <RRow label="Principal" value={fmt(principal)}/>
+        <RRow label="Total Interest" value={fmt(interest)} bold highlight={T.red}/>
+        <RRow label="Total Repayment" value={fmt(total)} bold/>
+        <RRow label="Interest Burden" value={`${100-princPct}% of total`} last/>
+        <div style={{marginTop:14}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:7}}>
+            <span style={{color:T.teal,fontWeight:600}}>Principal {princPct}%</span>
+            <span style={{color:T.red,fontWeight:600}}>Interest {100-princPct}%</span>
+          </div>
+          <div style={{display:"flex",borderRadius:99,overflow:"hidden",height:12}}>
+            <div style={{width:`${princPct}%`,background:T.teal}}/><div style={{flex:1,background:T.red}}/>
+          </div>
+        </div>
+      </Card>
+    </div>
+    <Card style={{padding:"22px 0",display:"flex",flexDirection:"column"}}>
+      <div style={{padding:"0 22px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <STitle style={{margin:0}}>Amortisation Schedule</STitle>
+        <span style={{fontSize:11,color:T.sub}}>First {Math.min(months,36)} months</span>
+      </div>
+      <div style={{overflowY:"auto",flex:1}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead>
+            <tr style={{background:T.bg,position:"sticky",top:0}}>
+              {["Mo.","EMI","Principal","Interest","Balance"].map(h=>
+                <th key={h} style={{padding:"9px 14px",textAlign:"right",fontWeight:600,fontSize:10,color:T.sub,textTransform:"uppercase",letterSpacing:0.5,borderBottom:`1px solid ${T.border}`}}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {sched.map((row,i)=><tr key={i} style={{borderBottom:`1px solid ${T.border}`,background:i%2===0?"#fff":T.bg}}>
+              <td style={{padding:"8px 14px",textAlign:"right",color:T.sub,fontWeight:600}}>{row.m}</td>
+              <td style={{padding:"8px 14px",textAlign:"right"}}>₹{row.emi.toLocaleString("en-IN")}</td>
+              <td style={{padding:"8px 14px",textAlign:"right",color:T.teal,fontWeight:600}}>₹{row.pr.toLocaleString("en-IN")}</td>
+              <td style={{padding:"8px 14px",textAlign:"right",color:T.red}}>₹{row.int.toLocaleString("en-IN")}</td>
+              <td style={{padding:"8px 14px",textAlign:"right"}}>₹{row.bal.toLocaleString("en-IN")}</td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  </div>;
+}
+
+/* ══ MODULE 4 — GOAL PLANNER ══════════════════════════════════════════ */
+const GCLR=[T.teal,"#0E2040","#C9920A","#6366F1","#D63D3D","#1A8A5C"];
+function Goals(){
+  const[goals,setGoals]=useState([
+    {id:1,name:"Emergency Fund",target:200000,saved:78000,deadline:"2025-12-31",color:T.teal},
+    {id:2,name:"Car Down Payment",target:150000,saved:41000,deadline:"2026-06-30",color:"#0E2040"},
+    {id:3,name:"Laptop Upgrade",target:80000,saved:65000,deadline:"2025-09-30",color:"#C9920A"},
+  ]);
+  const[name,setName]=useState("");const[target,setTarget]=useState("");
+  const[saved,setSaved]=useState("");const[deadline,setDeadline]=useState("");
+  const add=()=>{if(!name||!target)return;setGoals(p=>[...p,{id:Date.now(),name,target:Number(target),saved:Number(saved||0),deadline,color:GCLR[p.length%GCLR.length]}]);setName("");setTarget("");setSaved("");setDeadline("");};
+  const dl=d=>d?Math.ceil((new Date(d)-new Date())/86400000):null;
+  const ml=d=>d?Math.max(0,Math.ceil(dl(d)/30)):null;
+  return <div style={{display:"grid",gridTemplateColumns:"340px 1fr",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <STitle>New Goal</STitle>
+        <FInput label="Goal Name" value={name} onChange={setName} type="text" placeholder="e.g. Home Down Payment" step={1}/>
+        <FInput label="Target Amount" value={target} onChange={setTarget} prefix="INR" step={10000}/>
+        <FInput label="Already Saved" value={saved} onChange={setSaved} prefix="INR" step={1000}/>
+        <div style={{marginBottom:16}}>
+          <Lbl>Target Date</Lbl>
+          <div style={{border:`1.5px solid ${T.border}`,borderRadius:9,overflow:"hidden"}}>
+            <input type="date" value={deadline} onChange={e=>setDeadline(e.target.value)}
+              style={{width:"100%",padding:"10px 13px",border:"none",outline:"none",fontSize:14,color:T.text,background:"#fff",cursor:"pointer",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          </div>
+        </div>
+        <Btn onClick={add} bg={T.navy} style={{width:"100%",justifyContent:"center"}}><Icons.plus/>Add Goal</Btn>
+      </Card>
+      {goals.length>0&&<Card>
+        <STitle>Portfolio</STitle>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Stat label="Total Target" value={fmtL(goals.reduce((a,g)=>a+g.target,0))}/>
+          <Stat label="Total Saved" value={fmtL(goals.reduce((a,g)=>a+g.saved,0))} color={T.teal}/>
+        </div>
+        <div style={{marginTop:14}}>
+          <div style={{fontSize:12,color:T.sub,marginBottom:7}}>Overall progress</div>
+          <Bar value={goals.reduce((a,g)=>a+g.saved,0)} total={goals.reduce((a,g)=>a+g.target,0)} color={T.teal}/>
+        </div>
+      </Card>}
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {goals.length===0&&<Card style={{display:"flex",alignItems:"center",justifyContent:"center",minHeight:200}}>
+        <div style={{textAlign:"center",color:T.sub,fontSize:14}}>No goals added yet.</div>
+      </Card>}
+      {goals.map(g=>{
+        const p=pct(g.saved,g.target),d=dl(g.deadline),m=ml(g.deadline);
+        const rem=g.target-g.saved,monthly=m>0?Math.ceil(rem/m):null,done=g.saved>=g.target;
+        return <Card key={g.id} style={{borderLeft:`4px solid ${g.color}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:15,color:T.text,marginBottom:4}}>{g.name}</div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                {done?<Badge color={T.green} bg={T.greenLt}>Completed</Badge>
+                :d!==null&&<Badge color={d<30?T.red:T.sub} bg={d<30?T.redLt:T.bg}>{d>0?`${d} days left`:"Overdue"}</Badge>}
+                <span style={{fontSize:13,fontWeight:700,color:g.color}}>{p}%</span>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              {done&&<span style={{color:T.green}}><Icons.check/></span>}
+              <button onClick={()=>setGoals(p=>p.filter(x=>x.id!==g.id))} style={{background:"none",border:"none",cursor:"pointer",color:T.sub,display:"flex",padding:4}}><Icons.trash/></button>
+            </div>
+          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:10,flexWrap:"wrap",gap:8}}>
+            <span style={{color:T.sub}}>Saved <strong style={{color:T.text}}>{fmt(g.saved)}</strong></span>
+            <span style={{color:T.sub}}>Target <strong style={{color:T.text}}>{fmt(g.target)}</strong></span>
+            <span style={{color:T.sub}}>Remaining <strong style={{color:T.red}}>{fmt(rem)}</strong></span>
+          </div>
+          <Bar value={g.saved} total={g.target} color={done?T.green:g.color}/>
+          {monthly&&!done&&<div style={{marginTop:10,padding:"9px 12px",background:T.bg,borderRadius:8,fontSize:12,color:T.sub}}>
+            Save <strong style={{color:T.teal}}>{fmt(monthly)}/month</strong> to reach your goal on time.
+          </div>}
+          <div style={{marginTop:10}}>
+            <input type="number" placeholder="Update saved amount and press Enter" min={0} max={g.target}
+              onKeyDown={e=>{if(e.key==="Enter"&&e.target.value){setGoals(p=>p.map(x=>x.id===g.id?{...x,saved:Math.min(x.target,Number(e.target.value))}:x));e.target.value="";}}}
+              style={{width:"100%",padding:"8px 11px",border:`1.5px solid ${T.border}`,borderRadius:8,fontSize:12,color:T.text,outline:"none",fontFamily:"inherit",boxSizing:"border-box"}}/>
+          </div>
+        </Card>;
+      })}
+    </div>
+  </div>;
+}
+
+/* ══ MODULE 5 — SAVINGS & INVESTMENT ════════════════════════════════════ */
+function Savings(){
+  const[mode,setMode]=useState("sip");
+  const[monthly,setMonthly]=useState(5000);const[lump,setLump]=useState(100000);
+  const[rate,setRate]=useState(12);const[years,setYears]=useState(10);
+  const[fdAmt,setFdAmt]=useState(100000);const[fdRate,setFdRate]=useState(7.1);
+  const[fdYears,setFdYears]=useState(3);const[fdFreq,setFdFreq]=useState("quarterly");
+  const r=Number(rate)/100,y=Number(years),n=y*12,rm=r/12;
+  const M=Number(monthly),L=Number(lump);
+  const sipFV=rm?M*(Math.pow(1+rm,n)-1)/rm*(1+rm):M*n;
+  const sipInv=M*n,sipGain=sipFV-sipInv;
+  const lumpFV=L*Math.pow(1+r,y),lumpGain=lumpFV-L;
+  const fdN=Number(fdYears),fdR=Number(fdRate)/100;
+  const kMap={"monthly":12,"quarterly":4,"half-yearly":2,"annually":1};
+  const k=kMap[fdFreq]||4;
+  const fdFV=Number(fdAmt)*Math.pow(1+fdR/k,k*fdN),fdInt=fdFV-Number(fdAmt);
+  const sipData=[];for(let i=1;i<=y;i++){const ni=i*12;const fv=rm?M*(Math.pow(1+rm,ni)-1)/rm*(1+rm):M*ni;sipData.push({yr:i,inv:M*ni,val:Math.round(fv)});}
+  const maxVal=Math.max(...sipData.map(d=>d.val),1);
+  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <div style={{display:"flex",gap:6,marginBottom:20,background:T.bg,borderRadius:10,padding:4}}>
+          {[["sip","SIP"],["lump","Lump Sum"],["fd","Fixed Deposit"]].map(([id,lbl])=>
+            <button key={id} onClick={()=>setMode(id)} style={{flex:1,padding:"9px 6px",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,
+              background:mode===id?T.navy:"transparent",color:mode===id?"#fff":T.sub,transition:"all 0.15s"}}>{lbl}</button>)}
+        </div>
+        {mode==="sip"&&<>
+          <STitle>SIP — Monthly Investment Plan</STitle>
+          <FInput label="Monthly Investment" value={monthly} onChange={setMonthly} prefix="INR" step={500}/>
+          <FInput label="Expected Annual Return (%)" value={rate} onChange={setRate} prefix="%" step={0.5} min={1}/>
+          <FInput label="Investment Period (Years)" value={years} onChange={setYears} prefix="yrs" step={1} min={1}/>
+        </>}
+        {mode==="lump"&&<>
+          <STitle>Lump Sum Investment</STitle>
+          <FInput label="Investment Amount" value={lump} onChange={setLump} prefix="INR" step={10000}/>
+          <FInput label="Expected Annual Return (%)" value={rate} onChange={setRate} prefix="%" step={0.5} min={1}/>
+          <FInput label="Investment Period (Years)" value={years} onChange={setYears} prefix="yrs" step={1} min={1}/>
+        </>}
+        {mode==="fd"&&<>
+          <STitle>Fixed Deposit Calculator</STitle>
+          <FInput label="Principal Amount" value={fdAmt} onChange={setFdAmt} prefix="INR" step={10000}/>
+          <FInput label="Annual Interest Rate (%)" value={fdRate} onChange={setFdRate} prefix="%" step={0.1} min={1}/>
+          <FInput label="Period (Years)" value={fdYears} onChange={setFdYears} prefix="yrs" step={1} min={1}/>
+          <SelInput label="Compounding Frequency" value={fdFreq} onChange={setFdFreq} options={["monthly","quarterly","half-yearly","annually"]}/>
+        </>}
+      </Card>
+      <Card style={{background:T.navy,border:"none"}}>
+        {mode!=="fd"?<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Maturity Value</div>
+              <div style={{fontSize:26,fontWeight:800,color:"#3ECFC6",letterSpacing:-0.8}}>{fmtL(mode==="sip"?sipFV:lumpFV)}</div></div>
+            <div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>Wealth Gain</div>
+              <div style={{fontSize:26,fontWeight:800,color:"#FFD166",letterSpacing:-0.8}}>{fmtL(mode==="sip"?sipGain:lumpGain)}</div></div>
+          </div>
+          <RRow label="Total Invested" value={fmt(mode==="sip"?sipInv:L)}/>
+          <RRow label="Estimated Returns" value={fmtL(mode==="sip"?sipGain:lumpGain)} highlight="#3ECFC6" bold/>
+          <RRow label="Return on Investment" value={`${Math.round((mode==="sip"?sipGain/sipInv:lumpGain/L)*100)}%`} last/>
+        </>:<>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:6}}>FD Maturity Value</div>
+          <div style={{fontSize:34,fontWeight:800,color:"#3ECFC6",letterSpacing:-1,marginBottom:14}}>{fmtL(fdFV)}</div>
+          <RRow label="Principal" value={fmt(Number(fdAmt))}/>
+          <RRow label="Interest Earned" value={fmt(fdInt)} highlight="#3ECFC6" bold/>
+          <RRow label="Effective Annual Yield" value={`${((Math.pow(1+fdR/k,k)-1)*100).toFixed(2)}%`} last/>
+        </>}
+      </Card>
+    </div>
+    <Card>
+      <STitle>{mode==="fd"?"Year-wise FD Growth":"SIP Growth — Year by Year"}</STitle>
+      {mode==="fd"?<>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+          <Stat label="Principal" value={fmt(Number(fdAmt))} color={T.navy}/>
+          <Stat label="Total Interest" value={fmt(fdInt)} color={T.teal}/>
+        </div>
+        {Array.from({length:fdN},(_,i)=>{
+          const yFV=Number(fdAmt)*Math.pow(1+fdR/k,k*(i+1));
+          const yInt=yFV-Number(fdAmt);
+          return <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <span style={{fontSize:11,color:T.sub,width:44,textAlign:"right",flexShrink:0}}>Yr {i+1}</span>
+            <div style={{flex:1,height:26,display:"flex",borderRadius:6,overflow:"hidden"}}>
+              <div style={{width:`${pct(Number(fdAmt),yFV)}%`,background:T.navy,display:"flex",alignItems:"center",paddingLeft:8}}>
+                <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap"}}>{fmt(Number(fdAmt))}</span>
+              </div>
+              <div style={{flex:1,background:T.teal,display:"flex",alignItems:"center",paddingLeft:6}}>
+                <span style={{fontSize:9,color:"#fff",whiteSpace:"nowrap"}}>+{fmt(Math.round(yInt))}</span>
+              </div>
+            </div>
+          </div>;
+        })}
+      </>:<>
+        <div style={{display:"flex",gap:14,marginBottom:16,justifyContent:"center"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:T.sub}}><div style={{width:10,height:10,borderRadius:2,background:T.navy}}/>Invested</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:T.sub}}><div style={{width:10,height:10,borderRadius:2,background:T.teal}}/>Returns</div>
+        </div>
+        <div style={{height:260,display:"flex",alignItems:"flex-end",gap:3,paddingBottom:20,position:"relative"}}>
+          {sipData.filter((_,i)=>sipData.length<=15||i%Math.ceil(sipData.length/12)===0||i===sipData.length-1).map((d,i)=>{
+            const valH=pct(d.val,maxVal*1.05);const invH=pct(d.inv,maxVal*1.05);
+            return <div key={i} style={{flex:1,height:"100%",display:"flex",flexDirection:"column",justifyContent:"flex-end",position:"relative"}}>
+              <div style={{width:"100%",borderRadius:"4px 4px 0 0",overflow:"hidden",height:`${valH}%`,display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
+                <div style={{height:`${invH/valH*100}%`,background:T.navy,minHeight:2}}/>
+                <div style={{flex:1,background:T.teal,minHeight:2}}/>
+              </div>
+              <div style={{textAlign:"center",fontSize:9,color:T.sub,position:"absolute",bottom:-18,left:0,right:0}}>{d.yr}y</div>
+            </div>;
+          })}
+        </div>
+        <div style={{marginTop:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <Stat label="Total Invested" value={fmtL(sipInv)} color={T.navy}/>
+          <Stat label="Estimated Value" value={fmtL(sipFV)} color={T.teal}/>
+        </div>
+      </>}
+    </Card>
+  </div>;
+}
+
+/* ══ MODULE 6 — NET WORTH TRACKER ══════════════════════════════════════ */
+const ACATS=["Cash & Savings","Fixed Deposits","Mutual Funds","Stocks / Equity","Real Estate","Gold","EPF / PPF","Vehicle","Other Assets"];
+const LCATS=["Home Loan","Car Loan","Personal Loan","Education Loan","Credit Card Dues","Other Liabilities"];
+const ACLR=["#0BA39A","#1B6FD8","#6366F1","#1A8A5C","#C9920A","#D4A017","#5B4FCF","#8B5CF6","#6B7280"];
+const LCLR=["#D63D3D","#E55A00","#C2185B","#AD1457","#B71C1C","#7B1FA2"];
+function NetWorth(){
+  const[assets,setAssets]=useState([
+    {id:1,cat:"Cash & Savings",amt:80000},{id:2,cat:"Fixed Deposits",amt:200000},
+    {id:3,cat:"Mutual Funds",amt:150000},{id:4,cat:"EPF / PPF",amt:120000},
+  ]);
+  const[liabs,setLiabs]=useState([
+    {id:1,cat:"Personal Loan",amt:50000},{id:2,cat:"Credit Card Dues",amt:15000},
+  ]);
+  const[aCat,setACat]=useState("Cash & Savings");const[aAmt,setAAmt]=useState("");
+  const[lCat,setLCat]=useState("Personal Loan");const[lAmt,setLAmt]=useState("");
+  const totalA=assets.reduce((s,x)=>s+Number(x.amt),0);
+  const totalL=liabs.reduce((s,x)=>s+Number(x.amt),0);
+  const netW=totalA-totalL,health=totalL===0?100:Math.max(0,Math.round((1-totalL/totalA)*100));
+  const aggA=ACATS.map((c,i)=>({label:c,color:ACLR[i],value:assets.filter(x=>x.cat===c).reduce((s,x)=>s+Number(x.amt),0)})).filter(x=>x.value>0);
+  const aggL=LCATS.map((c,i)=>({label:c,color:LCLR[i],value:liabs.filter(x=>x.cat===c).reduce((s,x)=>s+Number(x.amt),0)})).filter(x=>x.value>0);
+  const addA=()=>{if(!aAmt||Number(aAmt)<=0)return;setAssets(p=>[...p,{id:Date.now(),cat:aCat,amt:Number(aAmt)}]);setAAmt("");};
+  const addL=()=>{if(!lAmt||Number(lAmt)<=0)return;setLiabs(p=>[...p,{id:Date.now(),cat:lCat,amt:Number(lAmt)}]);setLAmt("");};
+  return <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card style={{background:T.navy,border:"none"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14,marginBottom:18}}>
+          {[["Total Assets",fmtL(totalA),"#3ECFC6"],["Liabilities",fmtL(totalL),"#FF7B7B"],["Net Worth",fmtL(netW),netW>=0?"#3ECFC6":"#FF7B7B"]].map(([l,v,c])=>
+            <div key={l}><div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:1,marginBottom:5}}>{l}</div>
+              <div style={{fontSize:18,fontWeight:800,color:c}}>{v}</div></div>)}
+        </div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.45)",marginBottom:7,display:"flex",justifyContent:"space-between"}}>
+          <span>Financial Health Score</span>
+          <span style={{color:health>70?"#3ECFC6":health>40?"#FFD166":"#FF7B7B",fontWeight:700}}>{health}%</span>
+        </div>
+        <Bar value={health} total={100} color={health>70?T.teal:health>40?T.gold:T.red}/>
+      </Card>
+      <Card>
+        <STitle>Add Asset</STitle>
+        <SelInput label="Asset Category" value={aCat} onChange={setACat} options={ACATS}/>
+        <FInput label="Current Value" value={aAmt} onChange={setAAmt} prefix="INR" placeholder="0" step={10000}/>
+        <Btn onClick={addA} bg={T.teal} style={{width:"100%",justifyContent:"center"}}><Icons.plus/>Add Asset</Btn>
+      </Card>
+      <Card>
+        <STitle>Add Liability</STitle>
+        <SelInput label="Liability Category" value={lCat} onChange={setLCat} options={LCATS}/>
+        <FInput label="Outstanding Amount" value={lAmt} onChange={setLAmt} prefix="INR" placeholder="0" step={5000}/>
+        <Btn onClick={addL} bg={T.red} style={{width:"100%",justifyContent:"center"}}><Icons.plus/>Add Liability</Btn>
+      </Card>
+    </div>
+    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+      <Card>
+        <STitle>Asset Breakdown</STitle>
+        <PieChart slices={aggA} size={120}/>
+        <div style={{marginTop:14,maxHeight:180,overflowY:"auto"}}>
+          {assets.map(a=>{const idx=ACATS.indexOf(a.cat);return(
+            <div key={a.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{width:8,height:8,borderRadius:99,background:ACLR[idx]||T.sub,flexShrink:0}}/>
+              <span style={{flex:1,fontSize:13,color:T.text}}>{a.cat}</span>
+              <span style={{fontSize:13,fontWeight:600,color:T.teal,whiteSpace:"nowrap"}}>{fmt(a.amt)}</span>
+              <button onClick={()=>setAssets(p=>p.filter(x=>x.id!==a.id))} style={{background:"none",border:"none",cursor:"pointer",color:T.sub,display:"flex",padding:2,flexShrink:0}}><Icons.trash/></button>
+            </div>);})}
+        </div>
+      </Card>
+      <Card>
+        <STitle>Liability Breakdown</STitle>
+        <PieChart slices={aggL} size={100}/>
+        <div style={{marginTop:14,maxHeight:160,overflowY:"auto"}}>
+          {liabs.length===0?<div style={{color:T.green,fontSize:13,textAlign:"center",padding:16,fontWeight:600}}>No liabilities recorded. Excellent!</div>
+          :liabs.map(l=>{const idx=LCATS.indexOf(l.cat);return(
+            <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${T.border}`}}>
+              <div style={{width:8,height:8,borderRadius:99,background:LCLR[idx]||T.sub,flexShrink:0}}/>
+              <span style={{flex:1,fontSize:13,color:T.text}}>{l.cat}</span>
+              <span style={{fontSize:13,fontWeight:600,color:T.red,whiteSpace:"nowrap"}}>{fmt(l.amt)}</span>
+              <button onClick={()=>setLiabs(p=>p.filter(x=>x.id!==l.id))} style={{background:"none",border:"none",cursor:"pointer",color:T.sub,display:"flex",padding:2,flexShrink:0}}><Icons.trash/></button>
+            </div>);})}
+        </div>
+      </Card>
+    </div>
+  </div>;
+}
+
+/* ══ DASHBOARD ══════════════════════════════════════════════════════════ */
+const MODS=[
+  {id:"tax",     label:"Tax Calculator",        sub:"Old & New regime · FY 2024-25 · Rebate 87A",         icon:<Icons.tax/>,      accent:T.teal,   lt:T.tealLt  },
+  {id:"budget",  label:"Budget Tracker",        sub:"Category-wise expenses · Pie chart · Balance",       icon:<Icons.budget/>,   accent:T.blue,   lt:T.blueLt  },
+  {id:"emi",     label:"EMI Analyser",          sub:"Loan EMI · Amortisation table · Interest cost",      icon:<Icons.emi/>,      accent:T.gold,   lt:T.goldLt  },
+  {id:"goals",   label:"Goal Planner",          sub:"Financial goals · Progress · Monthly savings",       icon:<Icons.goals/>,    accent:T.green,  lt:T.greenLt },
+  {id:"savings", label:"Savings & Investment",  sub:"SIP · Lump Sum · FD Calculator · Growth chart",     icon:<Icons.savings/>,  accent:T.purple, lt:T.purpleLt},
+  {id:"networth",label:"Net Worth Tracker",     sub:"Assets vs Liabilities · Health score · Breakdown",  icon:<Icons.networth/>, accent:T.red,    lt:T.redLt   },
+];
+function Dashboard({onNav}){
+  return <div>
+    <div style={{background:T.navy,borderRadius:16,padding:"36px 40px",marginBottom:24,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",top:-50,right:-30,width:220,height:220,borderRadius:99,background:"rgba(11,163,154,0.07)",pointerEvents:"none"}}/>
+      <div style={{position:"absolute",bottom:-40,right:100,width:160,height:160,borderRadius:99,background:"rgba(201,146,10,0.05)",pointerEvents:"none"}}/>
+      <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",letterSpacing:3,textTransform:"uppercase",marginBottom:12}}>Smart Financial Planning System · v1.0</div>
+      <h1 style={{fontSize:28,fontWeight:800,color:"#fff",margin:"0 0 10px",letterSpacing:-0.7,lineHeight:1.25}}>
+        Your complete financial<br/><span style={{color:"#3ECFC6"}}>planning dashboard.</span>
+      </h1>
+      <p style={{fontSize:14,color:"rgba(255,255,255,0.4)",margin:"0 0 26px",maxWidth:500,lineHeight:1.6}}>
+        Six integrated modules — tax planning, budgeting, loan analysis, goal setting,
+        investment projections, and net worth tracking. India-specific. No login required.
+      </p>
+      <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+        {[["6 Modules",T.teal],["FY 2024-25","rgba(255,255,255,0.15)"],["India-specific","rgba(255,255,255,0.15)"],["Open Source","rgba(255,255,255,0.15)"]].map(([l,bg])=>
+          <span key={l} style={{padding:"6px 14px",borderRadius:99,background:bg,color:"#fff",fontSize:12,fontWeight:600}}>{l}</span>)}
+      </div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:14}}>
+      {MODS.map(m=><div key={m.id} onClick={()=>onNav(m.id)}
+        style={{background:T.surface,borderRadius:14,padding:"22px",cursor:"pointer",border:`1px solid ${T.border}`,
+          boxShadow:"0 1px 3px rgba(0,0,0,0.04)",transition:"box-shadow 0.18s,transform 0.15s"}}
+        onMouseEnter={e=>{e.currentTarget.style.boxShadow="0 6px 20px rgba(0,0,0,0.09)";e.currentTarget.style.transform="translateY(-2px)"}}
+        onMouseLeave={e=>{e.currentTarget.style.boxShadow="0 1px 3px rgba(0,0,0,0.04)";e.currentTarget.style.transform=""}}>
+        <div style={{width:42,height:42,borderRadius:12,background:m.lt,color:m.accent,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>{m.icon}</div>
+        <div style={{fontWeight:700,fontSize:15,color:T.navy,marginBottom:5}}>{m.label}</div>
+        <div style={{fontSize:12,color:T.sub,lineHeight:1.6,marginBottom:14}}>{m.sub}</div>
+        <div style={{fontSize:12,color:m.accent,fontWeight:600,display:"flex",alignItems:"center",gap:4}}>Open module <Icons.right/></div>
+      </div>)}
+    </div>
+  </div>;
+}
+
+/* ══ MAIN APP ════════════════════════════════════════════════════════════ */
+const NAV=[
+  {id:"home",    label:"Dashboard",     icon:<Icons.home/>   },
+  {id:"tax",     label:"Tax Calc",      icon:<Icons.tax/>    },
+  {id:"budget",  label:"Budget",        icon:<Icons.budget/> },
+  {id:"emi",     label:"EMI",           icon:<Icons.emi/>    },
+  {id:"goals",   label:"Goals",         icon:<Icons.goals/>  },
+  {id:"savings", label:"Savings",       icon:<Icons.savings/>},
+  {id:"networth",label:"Net Worth",     icon:<Icons.networth/>},
+];
+const TITLES={home:"Dashboard",tax:"Income Tax Calculator",budget:"Budget Tracker",emi:"EMI Analyser",goals:"Goal Planner",savings:"Savings & Investment",networth:"Net Worth Tracker"};
+
+function App(){
+  const[page,setPage]=useState("home");
+  return <div style={{display:"flex",minHeight:"100vh",background:T.bg,fontFamily:"'DM Sans','Segoe UI',system-ui,sans-serif",color:T.text}}>
+    <aside style={{width:215,background:T.navy,display:"flex",flexDirection:"column",padding:"24px 0",position:"sticky",top:0,height:"100vh",flexShrink:0,overflowY:"auto"}}>
+      <div style={{padding:"0 20px 24px",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:34,height:34,borderRadius:10,background:T.teal,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",flexShrink:0}}><Icons.rupee/></div>
+          <div>
+            <div style={{fontSize:14,fontWeight:800,color:"#fff",letterSpacing:-0.3}}>SmartFin</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.3)"}}>Finance Planner</div>
+          </div>
+        </div>
+      </div>
+      <nav style={{padding:"14px 10px",flex:1}}>
+        {NAV.map(item=>{const on=page===item.id;return(
+          <button key={item.id} onClick={()=>setPage(item.id)} style={{display:"flex",alignItems:"center",gap:11,width:"100%",padding:"10px 13px",borderRadius:9,border:"none",
+            cursor:"pointer",background:on?"rgba(11,163,154,0.18)":"transparent",color:on?"#3ECFC6":"rgba(255,255,255,0.45)",
+            fontSize:13,fontWeight:on?600:400,fontFamily:"inherit",marginBottom:2,transition:"all 0.14s",textAlign:"left"}}>
+            {item.icon}{item.label}
+            {on&&<div style={{marginLeft:"auto",width:5,height:5,borderRadius:99,background:"#3ECFC6",flexShrink:0}}/>}
+          </button>);})}
+      </nav>
+      <div style={{padding:"14px 20px",fontSize:10,color:"rgba(255,255,255,0.18)",lineHeight:1.7}}>
+        MUIT Noida · B.Tech CSE<br/>Semester 6 · 2025-26
+      </div>
+    </aside>
+    <main style={{flex:1,padding:"30px 34px 50px",overflowY:"auto",minWidth:0}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:26}}>
+        <div>
+          {page!=="home"&&<div style={{fontSize:11,color:T.sub,letterSpacing:0.8,textTransform:"uppercase",marginBottom:4,cursor:"pointer"}}
+            onClick={()=>setPage("home")} onMouseEnter={e=>e.currentTarget.style.color=T.teal} onMouseLeave={e=>e.currentTarget.style.color=T.sub}>
+            Dashboard / {TITLES[page]}
+          </div>}
+          <h1 style={{fontSize:22,fontWeight:800,color:T.navy,margin:0,letterSpacing:-0.5}}>{TITLES[page]}</h1>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 14px",background:T.surface,border:`1px solid ${T.border}`,borderRadius:9,fontSize:13,color:T.sub}}>
+          <Icons.cal/>FY 2024 – 2025
+        </div>
+      </div>
+      {page==="home"    &&<Dashboard onNav={setPage}/>}
+      {page==="tax"     &&<TaxCalc/>}
+      {page==="budget"  &&<Budget/>}
+      {page==="emi"     &&<EMI/>}
+      {page==="goals"   &&<Goals/>}
+      {page==="savings" &&<Savings/>}
+      {page==="networth"&&<NetWorth/>}
+    </main>
+  </div>;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
